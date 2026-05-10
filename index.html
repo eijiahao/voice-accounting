@@ -79,12 +79,28 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC'
 .category-tabs button.active { border-color: #667eea; color: #667eea; font-weight: 600; background: #667eea10; }
 
 .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 10px 24px; border-radius: 20px; font-size: 14px; z-index: 200; animation: fadeUp 0.3s ease; }
+.setup h3 { margin-bottom: 12px; }
+.setup input { width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; margin-bottom: 10px; outline: none; }
+.setup input:focus { border-color: #667eea; }
+.setup .setup-hint { font-size: 12px; color: #999; margin-bottom: 12px; }
 @keyframes fadeUp { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
 </style>
 </head>
 <body>
 
 <div class="container">
+  <!-- Setup (shown when Supabase not configured) -->
+  <div class="card setup" id="setupPanel" style="display:none;">
+    <h3>🔑 首次使用，请配置云同步</h3>
+    <p class="setup-hint">需要家人共享数据？填入你的 Supabase 项目 URL 和密钥即可。不需云同步请直接跳过。</p>
+    <input type="text" id="setupUrl" placeholder="Supabase URL (https://xxx.supabase.co)">
+    <input type="text" id="setupKey" placeholder="anon public key">
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" onclick="saveSetup()">保存并启用云同步</button>
+      <button class="btn btn-outline" onclick="skipSetup()">跳过，仅本地使用</button>
+    </div>
+  </div>
+
   <!-- Header -->
   <div class="header">
     <h1>语音记账助手</h1>
@@ -185,8 +201,8 @@ const OTHER_INCOME = { icon: '📥', color: '#adb5bd', keywords: [] };
 // Mode 1: Supabase cloud DB (share across devices, always online)
 // Mode 2: Local server  (share across browsers on same machine)
 // Mode 3: localStorage  (single browser, no setup)
-const SUPABASE_URL = 'https://pbgulzqacfdgiwxkgqhy.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_dFLPuk1pSoltVRp32HTEBw_j7K7Dt0Z';
+const SUPABASE_URL = localStorage.getItem('sb_url') || '';
+const SUPABASE_KEY = localStorage.getItem('sb_key') || '';
 
 const isLocalServer = window.location.hostname === 'localhost' || window.location.hostname.startsWith('192.168.') || window.location.hostname.startsWith('10.') || window.location.hostname.startsWith('172.');
 const isSupabase = !!(SUPABASE_URL && SUPABASE_KEY);
@@ -869,9 +885,27 @@ function renderCharts() {
     });
   }
 }
+// ==================== SETUP ====================
+function saveSetup() {
+  const url = document.getElementById('setupUrl').value.trim();
+  const key = document.getElementById('setupKey').value.trim();
+  if (!url || !key) { toast('请填写 URL 和密钥'); return; }
+  localStorage.setItem('sb_url', url);
+  localStorage.setItem('sb_key', key);
+  toast('配置已保存，刷新中...');
+  setTimeout(() => location.reload(), 500);
+}
+
+function skipSetup() {
+  document.getElementById('setupPanel').style.display = 'none';
+}
 
 // ==================== INIT ====================
 async function init() {
+  const configured = !!(SUPABASE_URL && SUPABASE_KEY);
+  if (!configured) {
+    document.getElementById('setupPanel').style.display = 'block';
+  }
   transactions = await loadData();
   initSpeech();
   renderAll();
