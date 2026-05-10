@@ -339,46 +339,65 @@ function toast(msg) {
 
 // ==================== VOICE ====================
 let recognition = null;
+let voiceTimeout = null;
 
 function initSpeech() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
     document.getElementById('micBtn').disabled = true;
-    document.getElementById('micHint').textContent = '您的浏览器不支持语音识别，请使用 Chrome 或 Edge';
+    document.getElementById('micHint').textContent = '您的浏览器不支持语音识别，请使用 Chrome 浏览器';
     return;
   }
   recognition = new SpeechRecognition();
   recognition.lang = 'zh-CN';
   recognition.continuous = false;
-  recognition.interimResults = false;
+  recognition.interimResults = true;
   recognition.maxAlternatives = 1;
 
   recognition.onstart = () => {
     document.getElementById('micBtn').classList.add('listening');
     document.getElementById('micHint').textContent = '正在聆听...';
+    // 超时保护：8秒后自动停止，防止荣耀等机型卡死在聆听状态
+    voiceTimeout = setTimeout(() => {
+      try { recognition.stop(); } catch(e) {}
+      document.getElementById('micBtn').classList.remove('listening');
+      document.getElementById('micHint').textContent = '识别超时，请重试（确保用 Chrome 浏览器打开）';
+    }, 8000);
   };
   recognition.onend = () => {
+    clearTimeout(voiceTimeout);
     document.getElementById('micBtn').classList.remove('listening');
     document.getElementById('micHint').textContent = '点击麦克风开始语音记账';
   };
   recognition.onerror = (e) => {
+    clearTimeout(voiceTimeout);
     document.getElementById('micBtn').classList.remove('listening');
-    if (e.error === 'no-speech') {
-      document.getElementById('micHint').textContent = '未检测到语音，请重试';
-    } else if (e.error === 'not-allowed') {
-      document.getElementById('micHint').textContent = '请允许使用麦克风';
-    } else {
-      document.getElementById('micHint').textContent = '识别出错，请重试';
-    }
+    var msgs = {
+      'no-speech': '未检测到语音，请重试',
+      'not-allowed': '请允许使用麦克风',
+      'audio-capture': '未找到麦克风设备',
+      'network': '网络连接失败，请检查网络',
+      'aborted': '识别已取消',
+      'language-not-supported': '浏览器不支持中文语音识别'
+    };
+    document.getElementById('micHint').textContent = msgs[e.error] || ('识别出错(' + (e.error || 'unknown') + ')，请用 Chrome 浏览器打开');
   };
   recognition.onresult = (e) => {
-    const text = e.results[0][0].transcript;
-    parseVoiceInput(text);
+    // interimResults 设为 true，只取最终结果
+    var last = e.results.length - 1;
+    if (e.results[last].isFinal) {
+      const text = e.results[last][0].transcript;
+      clearTimeout(voiceTimeout);
+      parseVoiceInput(text);
+    }
   };
 }
 
 function toggleVoice() {
-  if (!recognition) return;
+  if (!recognition) {
+    document.getElementById('micHint').textContent = '请使用 Chrome 浏览器打开此页面';
+    return;
+  }
   try {
     recognition.start();
   } catch (e) {
