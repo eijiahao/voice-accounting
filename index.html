@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>语音记账助手</title>
 <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f0f2f5; color: #333; min-height: 100vh; }
@@ -168,6 +169,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC'
         <button class="active" onclick="setChartMode('month')" id="chartMonth">月报</button>
         <button onclick="setChartMode('week')" id="chartWeek">周报</button>
       </div>
+      <select id="exportFormat" style="padding:4px 8px;border:2px solid #e0e0e0;border-radius:8px;font-size:12px;">
+        <option value="csv">CSV</option>
+        <option value="xls">Excel</option>
+        <option value="json">JSON</option>
+      </select>
       <button class="btn btn-outline btn-sm" onclick="exportData()">导出</button>
     </div>
     <div class="category-tabs" id="categoryTabs"></div>
@@ -607,12 +613,125 @@ async function saveData() {
 }
 
 function exportData() {
-  const blob = new Blob([JSON.stringify(transactions, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
+  var fmt = document.getElementById('exportFormat').value;
+  var content, mime, ext;
+
+  if (fmt === 'xls') {
+    exportExcel();
+    return;
+  }
+
+  if (fmt === 'csv') {
+    content = '\uFEFF日期,类型,金额,分类,备注\n';
+    for (var i = transactions.length - 1; i >= 0; i--) {
+      var t = transactions[i];
+      content += t.date + ',' + (t.type === 'expense' ? '支出' : '收入') + ',' + t.amount + ',' + t.category + ',' + (t.note || '') + '\n';
+    }
+    mime = 'text/csv;charset=utf-8';
+    ext = '.csv';
+  } else {
+    content = JSON.stringify(transactions, null, 2);
+    mime = 'application/json';
+    ext = '.json';
+  }
+
+  var blob = new Blob([content], { type: mime });
+  var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = '语音记账_备份_' + today() + '.json';
+  a.download = '语音记账_备份_' + today() + ext;
   a.click();
-  toast('数据已导出');
+  toast('已导出 ' + fmt.toUpperCase());
+}
+
+function exportExcel() {
+  if (typeof XLSX === 'undefined') { toast('Excel 组件加载中，请稍后重试'); return; }
+
+  // === Sheet 1: 汇总看板 ===
+  var dash = [];
+  dash.push(['语音记账 - 数据看板', '', '', '导出日期：' + today()]);
+  dash.push(['', '', '', '']);
+  dash.push(['【总览】', '', '', '']);
+
+  var totalInc = 0, totalExp = 0;
+  var expCats = {}, incCats = {};
+  for (var i = 0; i < transactions.length; i++) {
+    var t = transactions[i];
+    if (t.type === 'expense') {
+      totalExp += t.amount;
+      expCats[t.category] = (expCats[t.category] || 0) + t.amount;
+    } else {
+      totalInc += t.amount;
+      incCats[t.category] = (incCats[t.category] || 0) + t.amount;
+    }
+  }
+
+  dash.push(['总收入', totalInc, '', '总支出', totalExp]);
+  dash.push(['收支结余', totalInc - totalExp, '', '', '']);
+  dash.push(['', '', '', '']);
+  dash.push(['【支出分类汇总】', '', '', '', '']);
+  dash.push(['分类', '金额', '笔数', '占比', '']);
+
+  var expKeys = Object.keys(expCats).sort(function(a,b) { return expCats[b] - expCats[a]; });
+  for (var i = 0; i < expKeys.length; i++) {
+    var cat = expKeys[i];
+    var amt = expCats[cat];
+    var cnt = transactions.filter(function(tx) { return tx.type === 'expense' && tx.category === cat; }).length;
+    dash.push([cat, amt, cnt, totalExp > 0 ? (amt / totalExp * 100).toFixed(1) + '%' : '0%']);
+  }
+  dash.push(['支出合计', totalExp, '', '', '']);
+
+  dash.push(['', '', '', '']);
+  dash.push(['【收入分类汇总】', '', '', '', '']);
+  dash.push(['分类', '金额', '笔数', '占比', '']);
+
+  var incKeys = Object.keys(incCats).sort(function(a,b) { return incCats[b] - incCats[a]; });
+  for (var i = 0; i < incKeys.length; i++) {
+    var cat = incKeys[i];
+    var amt = incCats[cat];
+    var cnt = transactions.filter(function(tx) { return tx.type === 'income' && tx.category === cat; }).length;
+    dash.push([cat, amt, cnt, totalInc > 0 ? (amt / totalInc * 100).toFixed(1) + '%' : '0%']);
+  }
+  dash.push(['收入合计', totalInc, '', '', '']);
+
+  // === Sheet 2: 月度汇总 ===
+  var monMap = {};
+  for (var i = 0; i < transactions.length; i++) {
+    var t = transactions[i];
+    var mon = t.date.substring(0, 7);
+    if (!monMap[mon]) monMap[mon] = { inc: 0, exp: 0 };
+    if (t.type === 'expense') monMap[mon].exp += t.amount;
+    else monMap[mon].inc += t.amount;
+  }
+  var monKeys = Object.keys(monMap).sort();
+  var monthData = [['月份', '收入', '支出', '结余']];
+  for (var i = 0; i < monKeys.length; i++) {
+    var m = monMap[monKeys[i]];
+    monthData.push([monKeys[i], m.inc, m.exp, m.inc - m.exp]);
+  }
+
+  // === Sheet 3: 全部明细 ===
+  var detail = [['日期', '类型', '金额', '分类', '备注']];
+  for (var i = transactions.length - 1; i >= 0; i--) {
+    var t = transactions[i];
+    detail.push([t.date, t.type === 'expense' ? '支出' : '收入', t.amount, t.category, t.note || '']);
+  }
+
+  // Create workbook
+  var wb = XLSX.utils.book_new();
+  var dashWs = XLSX.utils.aoa_to_sheet(dash);
+  dashWs['!cols'] = [{wch:16},{wch:14},{wch:10},{wch:12},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, dashWs, '汇总看板');
+
+  var monWs = XLSX.utils.aoa_to_sheet(monthData);
+  monWs['!cols'] = [{wch:12},{wch:14},{wch:14},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, monWs, '月度汇总');
+
+  var detWs = XLSX.utils.aoa_to_sheet(detail);
+  detWs['!cols'] = [{wch:12},{wch:8},{wch:12},{wch:12},{wch:30}];
+  XLSX.utils.book_append_sheet(wb, detWs, '全部明细');
+
+  XLSX.writeFile(wb, '语音记账_备份_' + today() + '.xlsx');
+  toast('已导出 Excel');
 }
 
 async function importData(input) {
