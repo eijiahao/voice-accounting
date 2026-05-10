@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>语音记账助手</title>
-<script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.7/chart.umd.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f0f2f5; color: #333; min-height: 100vh; }
@@ -47,7 +47,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC'
 .tab-bar button { padding: 8px 16px; border: none; border-radius: 20px; cursor: pointer; font-size: 13px; background: #f0f2f5; color: #666; transition: all 0.2s; }
 .tab-bar button.active { background: #667eea; color: #fff; }
 .tab-bar .spacer { flex: 1; }
-.tab-bar .add-btn { background: #52c41a; color: #fff; }
 
 /* Transaction list */
 .tx-list { max-height: 400px; overflow-y: auto; }
@@ -60,7 +59,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC'
 .tx-amount { font-size: 16px; font-weight: 600; }
 .tx-amount.expense { color: #ff4757; }
 .tx-amount.income { color: #52c41a; }
-.tx-actions { display: flex; gap: 4px; }
 .empty-state { text-align: center; padding: 40px; color: #ccc; }
 .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
 
@@ -70,15 +68,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC'
 .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 600px) { .chart-row { grid-template-columns: 1fr; } }
 
-/* Modal */
-.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: center; justify-content: center; }
-.modal { background: #fff; border-radius: 16px; padding: 24px; width: 90%; max-width: 420px; }
-.modal h3 { margin-bottom: 16px; }
-.modal label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; margin-top: 12px; }
-.modal input, .modal select { width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; outline: none; }
-.modal input:focus, .modal select:focus { border-color: #667eea; }
-.modal .modal-actions { display: flex; gap: 8px; margin-top: 20px; justify-content: flex-end; }
-.export-area { display: flex; gap: 8px; margin-top: 12px; }
+/* Chart controls */
+.chart-controls { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
+.view-mode-toggle, .time-toggle { display: inline-flex; background: #f0f2f5; border-radius: 20px; padding: 3px; }
+.view-mode-toggle button, .time-toggle button { border: none; padding: 5px 12px; border-radius: 17px; cursor: pointer; font-size: 12px; transition: all 0.2s; background: transparent; color: #666; white-space: nowrap; }
+.view-mode-toggle button.active, .time-toggle button.active { background: #fff; color: #667eea; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.category-tabs { display: flex; gap: 6px; margin-bottom: 14px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.category-tabs::-webkit-scrollbar { display: none; }
+.category-tabs button { border: 2px solid #e8e8e8; padding: 4px 12px; border-radius: 16px; cursor: pointer; font-size: 12px; background: #fff; color: #666; white-space: nowrap; transition: all 0.2s; flex-shrink: 0; }
+.category-tabs button.active { border-color: #667eea; color: #667eea; font-weight: 600; background: #667eea10; }
+
 .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 10px 24px; border-radius: 20px; font-size: 14px; z-index: 200; animation: fadeUp 0.3s ease; }
 @keyframes fadeUp { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
 </style>
@@ -126,8 +125,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC'
       <button class="active" onclick="setFilter('all')" id="tabAll">全部</button>
       <button onclick="setFilter('month')" id="tabMonth">本月</button>
       <button onclick="setFilter('week')" id="tabWeek">本周</button>
-      <span class="spacer"></span>
-      <button class="btn add-btn btn-sm" onclick="showAddModal()">+ 手动添加</button>
     </div>
     <div class="tx-list" id="txList">
       <div class="empty-state">
@@ -139,41 +136,23 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC'
 
   <!-- Analysis -->
   <div class="card">
-    <div class="tab-bar">
-      <button class="active" onclick="setChartMode('month')" id="chartMonth">月报</button>
-      <button onclick="setChartMode('week')" id="chartWeek">周报</button>
+    <div class="chart-controls">
+      <div class="view-mode-toggle">
+        <button class="active" onclick="setViewMode('expense')" id="viewExpense">仅支出</button>
+        <button onclick="setViewMode('income')" id="viewIncome">仅收入</button>
+        <button onclick="setViewMode('compare')" id="viewCompare">收支对比</button>
+      </div>
       <span class="spacer"></span>
-      <button class="btn btn-outline btn-sm" onclick="exportData()">导出数据</button>
-      <label class="btn btn-outline btn-sm" style="cursor:pointer;position:relative;">
-        导入数据
-        <input type="file" accept=".json" onchange="importData(this)" style="position:absolute;opacity:0;width:100%;height:100%;top:0;left:0;cursor:pointer;">
-      </label>
+      <div class="time-toggle">
+        <button class="active" onclick="setChartMode('month')" id="chartMonth">月报</button>
+        <button onclick="setChartMode('week')" id="chartWeek">周报</button>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="exportData()">导出</button>
     </div>
+    <div class="category-tabs" id="categoryTabs"></div>
     <div class="chart-row" id="charts">
       <div class="chart-container"><canvas id="chartBar"></canvas></div>
       <div class="chart-container"><canvas id="chartPie"></canvas></div>
-    </div>
-  </div>
-</div>
-
-<!-- Add/Edit Modal -->
-<div class="modal-overlay" id="modal" style="display:none;">
-  <div class="modal">
-    <h3 id="modalTitle">添加记录</h3>
-    <label>日期</label>
-    <input type="date" id="modalDate">
-    <label>类型</label>
-    <select id="modalType"><option value="expense">支出</option><option value="income">收入</option></select>
-    <label>金额</label>
-    <input type="number" id="modalAmount" step="0.01" min="0" placeholder="0.00">
-    <label>分类</label>
-    <select id="modalCategory"></select>
-    <label>备注</label>
-    <input type="text" id="modalNote" placeholder="备注（可选）">
-    <div class="modal-actions">
-      <button class="btn btn-outline" onclick="closeModal()">取消</button>
-      <button class="btn btn-danger btn-sm" id="modalDelete" style="display:none;margin-right:auto;" onclick="deleteTx()">删除</button>
-      <button class="btn btn-primary" onclick="saveModal()">保存</button>
     </div>
   </div>
 </div>
@@ -182,13 +161,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC'
 // ==================== DATA & CONFIG ====================
 const CATEGORIES = {
   expense: {
-    '餐饮': { icon: '🍽️', color: '#ff6b6b', keywords: ['吃饭','外卖','奶茶','咖啡','早餐','午餐','晚餐','饭店','餐厅','食堂','小吃','烧烤','火锅','面包','水果','零食','饮料','酒','喝水','聚餐','汉堡','披萨','寿司','麻辣烫','米线','面','饭','菜'] },
-    '交通': { icon: '🚗', color: '#ffa94d', keywords: ['打车','地铁','公交','加油','停车','火车','高铁','飞机','滴滴','出租车','油费','过路费','骑行','共享单车','地铁站'] },
-    '购物': { icon: '🛒', color: '#748ffc', keywords: ['买','衣服','淘宝','京东','超市','商场','网购','鞋','包','化妆品','日用品','手机','电脑','电器','裤子','裙子','帽子','袜子','护肤品','洗发水','沐浴露'] },
-    '娱乐': { icon: '🎮', color: '#20c997', keywords: ['电影','游戏','ktv','旅游','唱歌','出去玩','门票','聚会','运动','健身','游泳','台球','剧本杀','密室'] },
-    '住房': { icon: '🏠', color: '#7950f2', keywords: ['房租','水电','物业','网费','话费','煤气','暖气','维修','装修','宽带','水费','电费'] },
-    '医疗': { icon: '💊', color: '#f06595', keywords: ['药','医院','挂号','看病','体检','牙医','诊所','打针','输液','检查'] },
-    '教育': { icon: '📚', color: '#fab005', keywords: ['书','课程','培训','学费','考试','学习','资料','文具'] },
+    '餐饮': { icon: '🍽️', color: '#ff6b6b', keywords: ['吃饭','外卖','奶茶','咖啡','早餐','午餐','晚餐','饭店','餐厅','食堂','小吃','烧烤','火锅','面包','水果','零食','饮料','酒','喝水','聚餐','汉堡','披萨','寿司','麻辣烫','米线','面','饭','菜','买菜','买菜钱','下馆子','请客'] },
+    '交通': { icon: '🚗', color: '#ffa94d', keywords: ['打车','地铁','公交','加油','停车','火车','高铁','飞机','滴滴','出租车','油费','过路费','骑行','共享单车','地铁站','火车票','高铁票','机票','长途','大巴','客车','洗车','保养','停车费','摩托车','电动车','代驾'] },
+    '购物': { icon: '🛒', color: '#748ffc', keywords: ['衣服','淘宝','京东','超市','商场','网购','鞋','包','化妆品','日用品','手机','电脑','电器','裤子','裙子','帽子','袜子','护肤品','洗发水','沐浴露','家电','家具','数码','快递','网购','代购','买衣服','买鞋','买包','买了'] },
+    '娱乐': { icon: '🎮', color: '#20c997', keywords: ['电影','游戏','ktv','旅游','唱歌','出去玩','门票','聚会','运动','健身','游泳','台球','剧本杀','密室','演唱会','演出','按摩','足疗','泡温泉','滑雪','潜水','攀岩','骑行游'] },
+    '住房': { icon: '🏠', color: '#7950f2', keywords: ['房租','水电','物业','网费','话费','煤气','暖气','维修','装修','宽带','水费','电费','首付','房子','买房','房贷','购房','月供','按揭','租金','搬家','家居','房产','公寓','别墅','取暖费','物业费','装修费','买家具','交房'] },
+    '医疗': { icon: '💊', color: '#f06595', keywords: ['药','医院','挂号','看病','体检','牙医','诊所','打针','输液','检查','住院','手术','买药','药费','挂号费','中药','西药','牙科','眼科','急诊','化验','拍片'] },
+    '教育': { icon: '📚', color: '#fab005', keywords: ['书','课程','培训','学费','考试','学习','资料','文具','教材','上课','报名','补课','辅导','网课','书本','买书','培训班','考证','考研','学费钱'] },
   },
   income: {
     '工资': { icon: '💰', color: '#40c057', keywords: ['工资','发工资','薪水','月薪'] },
@@ -232,51 +211,56 @@ async function supabaseFetch(method, path, body) {
 }
 
 async function loadData() {
+  // Cascade: Supabase → local server → localStorage
   // Mode 1: Supabase cloud
   if (isSupabase) {
     try {
       const data = await supabaseFetch('GET', '/transactions?select=*&order=id.desc');
-      if (!Array.isArray(data)) return [];
-      return data.map(t => ({
-        id: t.id, date: t.date, type: t.type,
-        amount: parseFloat(t.amount), category: t.category, note: t.note || ''
-      }));
+      if (Array.isArray(data) && data.length > 0) {
+        return data.map(t => ({
+          id: t.id, date: t.date, type: t.type,
+          amount: parseFloat(t.amount), category: t.category, note: t.note || ''
+        }));
+      }
     } catch (e) {
-      console.warn('语音记账：Supabase 加载失败', e);
-      return [];
+      console.warn('语音记账：Supabase 加载失败，尝试备用方案', e);
     }
   }
   // Mode 2: Local server
   if (isLocalServer) {
     try {
       const res = await fetch(API_BASE + '/api/transactions');
-      if (!res.ok) throw new Error('API error');
-      const data = await res.json();
-      if (!Array.isArray(data)) return [];
-      return data.filter(t => t && typeof t.id === 'number' && typeof t.amount === 'number' && t.date && t.type && t.category);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          return data.filter(t => t && typeof t.id === 'number' && typeof t.amount === 'number' && t.date && t.type && t.category);
+        }
+      }
     } catch (e) {
-      console.warn('语音记账：服务器加载失败', e);
-      return [];
+      console.warn('语音记账：服务器加载失败，尝试本地存储', e);
     }
   }
   // Mode 3: localStorage
   try {
     const raw = localStorage.getItem('voice_accounting_data');
-    if (!raw) return [];
-    const data = JSON.parse(raw);
-    if (!Array.isArray(data)) return [];
-    return data.filter(t => t && typeof t.id === 'number' && typeof t.amount === 'number' && t.date && t.type && t.category);
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (Array.isArray(data)) {
+        return data.filter(t => t && typeof t.id === 'number' && typeof t.amount === 'number' && t.date && t.type && t.category);
+      }
+    }
   } catch (e) {
     console.warn('语音记账：本地数据加载失败，已重置', e);
-    return [];
   }
+  return [];
 }
 
 let transactions = [];
 let currentTxType = 'expense';
 let currentFilter = 'all';
 let currentChartMode = 'month';
-let editingId = null;
+let currentViewMode = 'expense';
+let currentCategoryFilter = 'all';
 let chartBar = null, chartPie = null;
 
 // ==================== HELPERS ====================
@@ -410,6 +394,25 @@ function extractAmount(text) {
   // "35块", "35元", "¥35", "35.5元"
   m = text.match(/(\d+(?:\.\d{1,2})?)\s*[块元圓]|[¥￥](\d+(?:\.\d{1,2})?)/);
   if (m) return parseFloat(m[1] || m[2]);
+
+  // "3亿5千万", "1.5亿2万"
+  m = text.match(/(\d+(?:\.\d{1,2})?)\s*亿\s*(\d+(?:\.\d{1,2})?)\s*万/);
+  if (m) return parseFloat(m[1]) * 100000000 + parseFloat(m[2]) * 10000;
+  // "3亿5000万"
+  m = text.match(/(\d+(?:\.\d{1,2})?)\s*亿\s*(\d{4,})\s*万?/);
+  if (m) return parseFloat(m[1]) * 100000000 + parseFloat(m[2]) * 10000;
+  // "70万", "3亿", "1.5万", "3.2亿"
+  m = text.match(/(\d+(?:\.\d{1,2})?)\s*[万亿]/);
+  if (m) {
+    const num = parseFloat(m[1]);
+    return text.includes('亿') ? num * 100000000 : num * 10000;
+  }
+  // "70万5千", "1万3千5百"
+  m = text.match(/(\d+)\s*万\s*(\d+)\s*千?/);
+  if (m) return parseInt(m[1]) * 10000 + parseInt(m[2]) * 1000;
+  // "70万5000", "1万3000"
+  m = text.match(/(\d+)\s*万\s*(\d{3,4})/);
+  if (m) return parseInt(m[1]) * 10000 + parseInt(m[2]);
 
   // "花了我35" / "用了35"
   m = text.match(/(?:花了?|用了?|消费|支付|付了?)\s*(\d+(?:\.\d{1,2})?)/);
@@ -667,92 +670,10 @@ function renderTxList() {
           <div class="tx-date">${t.date} · ${info.icon} ${t.category}</div>
         </div>
         <div class="tx-amount ${t.type}">${isExpense ? '-' : '+'}${formatMoney(t.amount)}</div>
-        <div class="tx-actions">
-          <button class="btn btn-outline btn-sm" onclick="showEditModal(${t.id})">编辑</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteTransaction(${t.id});toast('已删除')">删</button>
-        </div>
       </div>
     `;
   }).join('');
 }
-
-// ==================== MODAL ====================
-function showAddModal() {
-  editingId = null;
-  document.getElementById('modalTitle').textContent = '添加记录';
-  document.getElementById('modalDate').value = today();
-  document.getElementById('modalType').value = 'expense';
-  document.getElementById('modalAmount').value = '';
-  document.getElementById('modalNote').value = '';
-  document.getElementById('modalDelete').style.display = 'none';
-  populateModalCategory('expense');
-  document.getElementById('modal').style.display = 'flex';
-}
-
-function showEditModal(id) {
-  editingId = id;
-  const t = transactions.find(tx => tx.id === id);
-  if (!t) return;
-  document.getElementById('modalTitle').textContent = '编辑记录';
-  document.getElementById('modalDate').value = t.date;
-  document.getElementById('modalType').value = t.type;
-  document.getElementById('modalAmount').value = t.amount;
-  document.getElementById('modalNote').value = t.note;
-  document.getElementById('modalDelete').style.display = 'inline-block';
-  populateModalCategory(t.type, t.category);
-  document.getElementById('modal').style.display = 'flex';
-}
-
-function closeModal() {
-  document.getElementById('modal').style.display = 'none';
-  editingId = null;
-}
-
-function deleteTx() {
-  if (editingId) {
-    deleteTransaction(editingId);
-    closeModal();
-    toast('已删除');
-  }
-}
-
-function saveModal() {
-  const date = document.getElementById('modalDate').value;
-  const type = document.getElementById('modalType').value;
-  const amount = parseFloat(document.getElementById('modalAmount').value);
-  const category = document.getElementById('modalCategory').value;
-  const note = document.getElementById('modalNote').value || category;
-
-  if (!amount || amount <= 0) { toast('请输入有效金额'); return; }
-  if (!date) { toast('请选择日期'); return; }
-
-  if (editingId) {
-    updateTransaction(editingId, { date, type, amount, category, note });
-    toast('已更新 ✓');
-  } else {
-    addTransaction(type, amount, category, note, date);
-    toast('已添加 ✓');
-  }
-  closeModal();
-}
-
-function populateModalCategory(type, selected = null) {
-  const sel = document.getElementById('modalCategory');
-  sel.innerHTML = '';
-  const cats = getCategoryList(type);
-  for (const c of cats) {
-    const info = getCategoryInfo(c, type);
-    const opt = document.createElement('option');
-    opt.value = c;
-    opt.textContent = info.icon + ' ' + c;
-    opt.selected = (c === selected);
-    sel.appendChild(opt);
-  }
-}
-
-document.getElementById('modalType').addEventListener('change', function() {
-  populateModalCategory(this.value);
-});
 
 // ==================== CHARTS ====================
 function setChartMode(mode) {
@@ -762,71 +683,99 @@ function setChartMode(mode) {
   renderCharts();
 }
 
+function setViewMode(mode) {
+  currentViewMode = mode;
+  document.getElementById('viewExpense').classList.toggle('active', mode === 'expense');
+  document.getElementById('viewIncome').classList.toggle('active', mode === 'income');
+  document.getElementById('viewCompare').classList.toggle('active', mode === 'compare');
+  if (mode === 'income') currentCategoryFilter = 'all';
+  renderCategoryTabs();
+  renderCharts();
+}
+
+function setCategoryFilter(cat) {
+  currentCategoryFilter = cat;
+  renderCategoryTabs();
+  renderCharts();
+}
+
+function renderCategoryTabs() {
+  var container = document.getElementById('categoryTabs');
+  if (currentViewMode === 'income') { container.style.display = 'none'; return; }
+  container.style.display = 'flex';
+  var cats = getCategoryList('expense');
+  var html = '<button class="' + (currentCategoryFilter === 'all' ? 'active' : '') + '" onclick="setCategoryFilter(\'all\')">全部</button>';
+  for (var i = 0; i < cats.length; i++) {
+    var c = cats[i];
+    var info = getCategoryInfo(c, 'expense');
+    html += '<button class="' + (currentCategoryFilter === c ? 'active' : '') + '" onclick="setCategoryFilter(\'' + c + '\')">' + info.icon + ' ' + c + '</button>';
+  }
+  container.innerHTML = html;
+}
+
 function renderCharts() {
-  const now = new Date();
-  let startDate, endDate, labelGen, titlePrefix;
+  if (typeof Chart === 'undefined') return;
+  var now = new Date();
+  var startDate, endDate, titlePrefix;
 
   if (currentChartMode === 'week') {
-    const day = now.getDay() || 7;
+    var day = now.getDay() || 7;
     startDate = new Date(now);
     startDate.setDate(now.getDate() - day + 1);
     startDate.setHours(0, 0, 0, 0);
     endDate = new Date(startDate);
     endDate.setDate(startDate.getDate() + 6);
     endDate.setHours(23, 59, 59, 999);
-    labelGen = (i) => ['一','二','三','四','五','六','日'][i];
     titlePrefix = '本周';
   } else {
     startDate = new Date(now.getFullYear(), now.getMonth(), 1);
     endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    // Group by week or every few days for month
-    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    labelGen = (i) => {
-      if (currentChartMode === 'month') {
-        // Show every 5th day
-        return (i + 1) % 5 === 1 || i === 0 || i === daysInMonth - 1 ? (i + 1) + '日' : '';
-      }
-      return (i + 1) + '日';
-    };
     titlePrefix = '本月';
   }
 
-  const filtered = transactions.filter(t => {
-    const d = new Date(t.date);
+  var filtered = transactions.filter(function(t) {
+    var d = new Date(t.date);
     return d >= startDate && d <= endDate;
   });
 
+  // Apply category filter
+  if (currentCategoryFilter !== 'all' && currentViewMode !== 'income') {
+    filtered = filtered.filter(function(t) {
+      return t.type !== 'expense' || t.category === currentCategoryFilter;
+    });
+  }
+
   // Bar chart: daily expense/income
-  let labels = [];
-  let expenseData = [];
-  let incomeData = [];
+  var labels = [];
+  var expenseData = [];
+  var incomeData = [];
 
   if (currentChartMode === 'week') {
     labels = ['周一','周二','周三','周四','周五','周六','周日'];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(startDate);
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(startDate);
       d.setDate(startDate.getDate() + i);
-      const ds = d.toISOString().slice(0, 10);
-      let exp = 0, inc = 0;
-      for (const t of filtered) {
-        if (t.date === ds) {
-          if (t.type === 'expense') exp += t.amount;
-          else inc += t.amount;
+      var ds = d.toISOString().slice(0, 10);
+      var exp = 0, inc = 0;
+      for (var j = 0; j < filtered.length; j++) {
+        if (filtered[j].date === ds) {
+          if (filtered[j].type === 'expense') exp += filtered[j].amount;
+          else inc += filtered[j].amount;
         }
       }
       expenseData.push(exp);
       incomeData.push(inc);
     }
   } else {
-    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    labels = Array.from({ length: daysInMonth }, (_, i) => (i + 1) + '日');
-    for (let i = 0; i < daysInMonth; i++) {
-      const ds = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`;
-      let exp = 0, inc = 0;
-      for (const t of filtered) {
-        if (t.date === ds) {
-          if (t.type === 'expense') exp += t.amount;
-          else inc += t.amount;
+    var daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    labels = Array.from({ length: daysInMonth }, function(_, i) { return (i + 1) + '日'; });
+    for (var i = 0; i < daysInMonth; i++) {
+      var ds = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(i + 1).padStart(2, '0');
+      var exp = 0, inc = 0;
+      for (var j = 0; j < filtered.length; j++) {
+        if (filtered[j].date === ds) {
+          if (filtered[j].type === 'expense') exp += filtered[j].amount;
+          else inc += filtered[j].amount;
         }
       }
       expenseData.push(exp);
@@ -834,48 +783,62 @@ function renderCharts() {
     }
   }
 
-  // Pie chart: category breakdown (expense only)
-  const catMap = {};
-  for (const t of filtered) {
-    if (t.type === 'expense') {
-      catMap[t.category] = (catMap[t.category] || 0) + t.amount;
+  // Pie chart data
+  var pieType = currentViewMode === 'income' ? 'income' : 'expense';
+  var catMap = {};
+  for (var k = 0; k < filtered.length; k++) {
+    if (filtered[k].type === pieType) {
+      catMap[filtered[k].category] = (catMap[filtered[k].category] || 0) + filtered[k].amount;
     }
   }
-  const catEntries = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
-  const pieLabels = catEntries.map(e => e[0]);
-  const pieData = catEntries.map(e => e[1]);
-  const pieColors = catEntries.map(e => getCategoryInfo(e[0], 'expense').color);
+  var catEntries = Object.entries(catMap).sort(function(a, b) { return b[1] - a[1]; });
+  var pieLabels = catEntries.map(function(e) { return e[0]; });
+  var pieData = catEntries.map(function(e) { return e[1]; });
+  var pieColors = catEntries.map(function(e) { return getCategoryInfo(e[0], pieType).color; });
+
+  // Titles
+  var barTitle, pieTitle;
+  if (currentViewMode === 'expense') {
+    barTitle = titlePrefix + '每日支出'; pieTitle = titlePrefix + '支出分类占比';
+  } else if (currentViewMode === 'income') {
+    barTitle = titlePrefix + '每日收入'; pieTitle = titlePrefix + '收入分类占比';
+  } else {
+    barTitle = titlePrefix + '每日收支'; pieTitle = titlePrefix + '支出分类占比';
+  }
 
   // Destroy existing
   if (chartBar) chartBar.destroy();
   if (chartPie) chartPie.destroy();
 
+  // Build bar datasets
+  var datasets = [];
+  if (currentViewMode === 'expense' || currentViewMode === 'compare') {
+    datasets.push({ label: '支出', data: expenseData, backgroundColor: '#ff6b6b80', borderColor: '#ff6b6b', borderWidth: 1, borderRadius: 4 });
+  }
+  if (currentViewMode === 'income' || currentViewMode === 'compare') {
+    datasets.push({ label: '收入', data: incomeData, backgroundColor: '#51cf6680', borderColor: '#51cf66', borderWidth: 1, borderRadius: 4 });
+  }
+
   // Bar chart
-  const barCtx = document.getElementById('chartBar').getContext('2d');
+  var barCtx = document.getElementById('chartBar').getContext('2d');
   chartBar = new Chart(barCtx, {
     type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        { label: '支出', data: expenseData, backgroundColor: '#ff6b6b80', borderColor: '#ff6b6b', borderWidth: 1, borderRadius: 4 },
-        { label: '收入', data: incomeData, backgroundColor: '#51cf6680', borderColor: '#51cf66', borderWidth: 1, borderRadius: 4 }
-      ]
-    },
+    data: { labels: labels, datasets: datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        title: { display: true, text: titlePrefix + '每日收支', font: { size: 14 } },
+        title: { display: true, text: barTitle, font: { size: 14 } },
         legend: { position: 'bottom' }
       },
       scales: {
-        y: { beginAtZero: true, ticks: { callback: v => '¥' + v } }
+        y: { beginAtZero: true, ticks: { callback: function(v) { return '¥' + v; } } }
       }
     }
   });
 
   // Pie chart
-  const pieCtx = document.getElementById('chartPie').getContext('2d');
+  var pieCtx = document.getElementById('chartPie').getContext('2d');
   if (pieLabels.length > 0) {
     chartPie = new Chart(pieCtx, {
       type: 'doughnut',
@@ -887,7 +850,7 @@ function renderCharts() {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          title: { display: true, text: titlePrefix + '支出分类占比', font: { size: 14 } },
+          title: { display: true, text: pieTitle, font: { size: 14 } },
           legend: { position: 'bottom' }
         }
       }
@@ -900,23 +863,19 @@ function renderCharts() {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          title: { display: true, text: titlePrefix + '支出分类占比', font: { size: 14 } }
+          title: { display: true, text: pieTitle, font: { size: 14 } }
         }
       }
     });
   }
 }
 
-// Close modal on overlay click
-document.getElementById('modal').addEventListener('click', function(e) {
-  if (e.target === this) closeModal();
-});
-
 // ==================== INIT ====================
 async function init() {
   transactions = await loadData();
   initSpeech();
   renderAll();
+  renderCategoryTabs();
   // Show data mode
   const indicator = document.getElementById('modeIndicator');
   if (isSupabase) {
