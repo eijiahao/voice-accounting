@@ -114,6 +114,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC'
       <span>支出 <b style="color:#ff9090" id="totalExpense">¥0.00</b></span>
     </div>
     <div style="font-size:11px;opacity:0.7;margin-top:6px;" id="modeIndicator">本地模式</div>
+    <div id="shareLinkBox" style="display:none;margin-top:8px;"></div>
   </div>
 
   <!-- Voice Input -->
@@ -207,6 +208,22 @@ const OTHER_INCOME = { icon: '📥', color: '#adb5bd', keywords: [] };
 // Mode 3: localStorage  (single browser, no setup)
 const SUPABASE_URL = localStorage.getItem('sb_url') || '';
 const SUPABASE_KEY = localStorage.getItem('sb_key') || '';
+
+// Auto-configure from share link (URL hash contains credentials)
+(function() {
+  if (SUPABASE_URL && SUPABASE_KEY) return;
+  var hash = window.location.hash.substring(1);
+  if (!hash) return;
+  var p = new URLSearchParams(hash);
+  var url = p.get('url');
+  var key = p.get('key');
+  if (url && key) {
+    localStorage.setItem('sb_url', url);
+    localStorage.setItem('sb_key', key);
+    window.location.hash = '';
+    window.location.reload();
+  }
+})();
 
 const isLocalServer = window.location.hostname === 'localhost' || window.location.hostname.startsWith('192.168.') || window.location.hostname.startsWith('10.') || window.location.hostname.startsWith('172.');
 const isSupabase = !!(SUPABASE_URL && SUPABASE_KEY);
@@ -951,6 +968,29 @@ function renderCharts() {
   }
 }
 // ==================== SETUP ====================
+var shareLinkUrl = '';
+
+function copyShareLink() {
+  var tmp = document.createElement('textarea');
+  tmp.value = shareLinkUrl;
+  document.body.appendChild(tmp);
+  tmp.select();
+  try {
+    document.execCommand('copy');
+    toast('链接已复制，发给家人即可');
+  } catch (e) {
+    prompt('手动复制以下链接发给家人：', shareLinkUrl);
+  }
+  document.body.removeChild(tmp);
+}
+
+function resetSetup() {
+  if (!confirm('确定要清除当前配置吗？')) return;
+  localStorage.removeItem('sb_url');
+  localStorage.removeItem('sb_key');
+  location.reload();
+}
+
 function saveSetup() {
   const url = document.getElementById('setupUrl').value.trim();
   const key = document.getElementById('setupKey').value.trim();
@@ -967,10 +1007,13 @@ function skipSetup() {
 
 // ==================== INIT ====================
 async function init() {
-  const configured = !!(SUPABASE_URL && SUPABASE_KEY);
+  var configured = !!(SUPABASE_URL && SUPABASE_KEY);
   if (!configured) {
     document.getElementById('setupPanel').style.display = 'block';
   }
+  // Pre-fill setup form with existing values
+  if (SUPABASE_URL) document.getElementById('setupUrl').value = SUPABASE_URL;
+  if (SUPABASE_KEY) document.getElementById('setupKey').value = SUPABASE_KEY;
   transactions = await loadData();
   initSpeech();
   renderAll();
@@ -979,6 +1022,9 @@ async function init() {
   const indicator = document.getElementById('modeIndicator');
   if (isSupabase) {
     indicator.textContent = '☁️ 云同步模式（多设备共享）';
+    shareLinkUrl = window.location.origin + window.location.pathname + '#url=' + encodeURIComponent(SUPABASE_URL) + '&key=' + encodeURIComponent(SUPABASE_KEY);
+    document.getElementById('shareLinkBox').style.display = 'block';
+    document.getElementById('shareLinkBox').innerHTML = '<button class="btn btn-outline btn-sm" onclick="copyShareLink()">📋 复制家庭链接</button> <button class="btn btn-outline btn-sm" style="color:#ff4757;border-color:#ff4757;" onclick="resetSetup()">重置配置</button>';
   } else if (isLocalServer) {
     indicator.textContent = '🏠 服务器模式（局域网共享）';
   } else {
