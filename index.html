@@ -59,6 +59,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC'
 .tx-amount { font-size: 16px; font-weight: 600; }
 .tx-amount.expense { color: #ff4757; }
 .tx-amount.income { color: #52c41a; }
+.tx-acts { display: flex; gap: 2px; flex-shrink: 0; }
+.tx-acts button { width: 26px; height: 26px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; line-height: 26px; padding: 0; text-align: center; }
+.tx-acts .btn-edit { background: #f0f0f0; color: #666; }
+.tx-acts .btn-del { background: #fff0f0; color: #ff4757; }
 .empty-state { text-align: center; padding: 40px; color: #ccc; }
 .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
 
@@ -686,9 +690,70 @@ function renderTxList() {
           <div class="tx-date">${t.date} · ${info.icon} ${t.category}</div>
         </div>
         <div class="tx-amount ${t.type}">${isExpense ? '-' : '+'}${formatMoney(t.amount)}</div>
+        <div class="tx-acts">
+          <button class="btn-edit" onclick="startEdit(${t.id})" title="编辑">✎</button>
+          <button class="btn-del" onclick="delTx(${t.id})" title="删除">✕</button>
+        </div>
       </div>
     `;
   }).join('');
+}
+
+// ==================== EDIT / DELETE ====================
+function delTx(id) {
+  if (!confirm('确定删除这条记录吗？')) return;
+  deleteTransaction(id);
+  toast('已删除');
+}
+
+function startEdit(id) {
+  const t = transactions.find(function(tx) { return tx.id === id; });
+  if (!t) return;
+  const isExpense = t.type === 'expense';
+  const catList = getCategoryList(t.type);
+  var optHtml = '';
+  for (var i = 0; i < catList.length; i++) {
+    var info = getCategoryInfo(catList[i], t.type);
+    optHtml += '<option value="' + catList[i] + '"' + (catList[i] === t.category ? ' selected' : '') + '>' + info.icon + ' ' + catList[i] + '</option>';
+  }
+  const container = document.getElementById('txList');
+  const rows = container.querySelectorAll('.tx-item');
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].querySelector('.btn-edit') && rows[i].querySelector('.btn-edit').getAttribute('onclick').indexOf(String(id)) !== -1) {
+      rows[i].outerHTML = '<div class="tx-item" style="flex-wrap:wrap;gap:8px;">' +
+        '<input type="date" id="editDate" value="' + t.date + '" style="padding:4px 8px;border:2px solid #e0e0e0;border-radius:8px;font-size:14px;">' +
+        '<select id="editType" style="padding:4px 8px;border:2px solid #e0e0e0;border-radius:8px;font-size:14px;"><option value="expense"' + (t.type==='expense'?' selected':'') + '>支出</option><option value="income"' + (t.type==='income'?' selected':'') + '>收入</option></select>' +
+        '<input type="number" id="editAmount" value="' + t.amount + '" step="0.01" min="0" style="width:90px;padding:4px 8px;border:2px solid #e0e0e0;border-radius:8px;font-size:14px;">' +
+        '<select id="editCategory" style="padding:4px 8px;border:2px solid #e0e0e0;border-radius:8px;font-size:14px;">' + optHtml + '</select>' +
+        '<input type="text" id="editNote" value="' + (t.note || t.category) + '" style="flex:1;min-width:80px;padding:4px 8px;border:2px solid #e0e0e0;border-radius:8px;font-size:14px;" placeholder="备注">' +
+        '<button class="btn btn-primary btn-sm" onclick="saveEdit(' + id + ')">保存</button>' +
+        '<button class="btn btn-outline btn-sm" onclick="renderAll()">取消</button>' +
+        '</div>';
+      // Update category dropdown when type changes
+      document.getElementById('editType').addEventListener('change', function() {
+        var cats = getCategoryList(this.value);
+        var html = '';
+        for (var j = 0; j < cats.length; j++) {
+          var inf = getCategoryInfo(cats[j], this.value);
+          html += '<option value="' + cats[j] + '">' + inf.icon + ' ' + cats[j] + '</option>';
+        }
+        document.getElementById('editCategory').innerHTML = html;
+      });
+      break;
+    }
+  }
+}
+
+function saveEdit(id) {
+  var date = document.getElementById('editDate').value;
+  var type = document.getElementById('editType').value;
+  var amount = parseFloat(document.getElementById('editAmount').value);
+  var category = document.getElementById('editCategory').value;
+  var note = document.getElementById('editNote').value || category;
+  if (!amount || amount <= 0) { toast('请输入有效金额'); return; }
+  if (!date) { toast('请选择日期'); return; }
+  updateTransaction(id, { date: date, type: type, amount: amount, category: category, note: note });
+  toast('已更新');
 }
 
 // ==================== CHARTS ====================
